@@ -1,0 +1,4 @@
+interface:
+  display_name: "多语言监管要求法规整理"
+  short_description: "核验法规原文，完整翻译并按既有模板生成Excel，多份法规逐份确认"
+  default_prompt: "请使用 $regulation-to-excel（多语言监管要求法规整理），按照原文链接和参考模板整理法规Excel；完整覆盖条款、准确翻译，多份法规逐份交付并等待我确认。"
