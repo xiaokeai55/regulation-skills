@@ -237,7 +237,7 @@ python -m pip install openpyxl
 python "/技能安装目录/regulation-to-excel/scripts/verify_excel.py" --workbook "/输出目录/法规名称.xlsx" --manifest "/工作目录/manifest.json" --template "/本次任务使用的样表.xlsx" --report "/工作目录/verification.json"
 ~~~
 
-manifest.json 由执行技能的模型按[数据结构说明](regulation-to-excel/references/excel-schema.md)准备。检查失败后修复并重新验证，再交付 Excel。
+manifest.json 由执行技能的模型按[数据结构说明](references/excel-schema.md)准备。检查失败后修复并重新验证，再交付 Excel。
 
 自动检查用于核对结构、条款清单、数据一致性和留空规则，不能代替对完整原文及译文法律效果的逐条复核。
 
