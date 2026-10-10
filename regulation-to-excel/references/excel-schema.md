@@ -104,7 +104,7 @@ H为否的I至M必须是JSON null／Excel空单元格。D不存在时的“/”�
 
 ## 辅助脚本运行
 
-安装与平台差异见[使用说明](../README.md)。Node生成步骤适用于具备artifact-tool的Codex；Claude使用可用xlsx／表格工具，或在不可用时使用可用Excel库。两者遵守相同数据合同和语义复核；具备Python及openpyxl时均可运行只读验证脚本。
+安装与平台差异见[仓库使用说明](https://github.com/xiaokeai55/regulation-skills#readme)。Node生成步骤适用于具备artifact-tool的Codex；Claude使用可用xlsx／表格工具，或在不可用时使用可用Excel库。两者遵守相同数据合同和语义复核；具备Python及openpyxl时均可运行只读验证脚本。
 
 1. 使用当前平台表格skill及运行时依赖，不固定用户、操作系统或旧版本路径。复制scripts/build_excel.mjs到本次可写工作目录，在该目录链接平台允许的node_modules；按表格skill记录生成操作。
 2. 调用 `node build_excel.mjs --manifest manifest.json --template <本次样表.xlsx> --output <用户目录>/法规名称.xlsx --preview-dir <工作目录>/previews`。无新样表时使用随附模板。脚本保留模板样式，超出已有模板范围时沿最后一个正文样式行延展，只对H列设置适用性颜色。新样表的特殊分区／来源位置及可见F列若超出现有脚本能力，应按实际模板调整生成与验证。

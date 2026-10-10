@@ -62,7 +62,7 @@ https://github.com/xiaokeai55/regulation-skills/tree/main/regulation-to-excel
 解压后的技能文件夹：
 C:\Users\USERNAME\Downloads\regulation-to-excel
 
-读取 README.md 和 SKILL.md，检查模板、引用文档和辅助脚本。
+读取 SKILL.md，检查模板、引用文档和辅助脚本；如提供了仓库根目录 README.md，可一并参考安装说明。
 将完整文件夹安装到当前 Codex 使用的个人技能目录，技能标识保持 regulation-to-excel。
 如已有同名技能，备份后更新，并保留其他技能。
 完成后检查文件，说明安装路径、调用方式，以及是否需要重启或新开会话。
@@ -180,7 +180,6 @@ $regulation-to-excel
 ~~~text
 regulation-to-excel/
 ├── SKILL.md
-├── README.md
 ├── agents/openai.yaml
 ├── assets/regulation-template.xlsx
 ├── references/
@@ -192,7 +191,7 @@ regulation-to-excel/
     └── verify_excel.py
 ~~~
 
-SKILL.md 直接位于技能文件夹根目录，避免重复嵌套 regulation-to-excel/regulation-to-excel。
+SKILL.md 直接位于技能文件夹根目录，避免重复嵌套 regulation-to-excel/regulation-to-excel。README.md 仅保留在仓库根目录，技能子文件夹不包含 README.md。
 
 GitHub 仓库结构：
 
@@ -202,7 +201,6 @@ regulation-skills/
 ├── LICENSE
 └── regulation-to-excel/
     ├── SKILL.md
-    ├── README.md
     ├── agents/
     ├── assets/
     ├── references/
