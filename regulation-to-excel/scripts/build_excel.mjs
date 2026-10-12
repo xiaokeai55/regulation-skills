@@ -1,5 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { FileBlob, SpreadsheetFile } from '@oai/artifact-tool';
 
 // Copy this builder to a writable task directory with the platform's spreadsheet dependencies.
@@ -37,7 +41,21 @@ if (!rows.length) throw new Error('Need nonempty rows');
 if (data.inventory.join('\n') !== data.units.map(u => u.id).join('\n')) throw new Error('Source inventory and units differ');
 if (rows.some(r => r.some(v => typeof v === 'string' && v.length > 32767))) throw new Error('Split oversized clauses by original subparagraph before authoring');
 if (rows.some(r => r.some(v => typeof v === 'string' && v.startsWith('=')))) throw new Error('Handle leading = as literal text using the spreadsheet API documentation, then verify saved original text');
-const wb = await SpreadsheetFile.importXlsx(await FileBlob.load(args.template));
+// Updating imported notes is not exposed by the documented artifact API. Update
+// only the existing note XML in a disposable template before importing it.
+const temporary = await fs.mkdtemp(path.join(os.tmpdir(),'regulation-source-note-'));
+let prepared, wb;
+try {
+  const helper = fileURLToPath(new URL('./prepare_source_note.py',import.meta.url));
+  const { stdout } = await promisify(execFile)(args.python ?? 'python',[
+    helper,'--template',args.template,'--manifest',args.manifest,
+    '--output',path.join(temporary,'template.xlsx')
+  ],{encoding:'utf8',env:{...process.env,PYTHONIOENCODING:'utf-8'}});
+  prepared = JSON.parse(stdout);
+  wb = await SpreadsheetFile.importXlsx(await FileBlob.load(prepared.template));
+} finally {
+  await fs.rm(temporary,{recursive:true,force:true});
+}
 const sheet = wb.worksheets.getItemAt(0);
 const previous = Math.max(3,sheet.getUsedRange().values.length);
 const last = rows.length + 2;
@@ -69,7 +87,7 @@ for (let i = 0; i < rows.length; i++) {
   sheet.getRange('A'+(i+3)+':N'+(i+3)).format.rowHeight = Math.min(409.5,Math.max(baseHeight,lines*16.5+8));
   sheet.getRange('H'+(i+3)).format.fill = colors[rows[i][7]];
 }
-wb.notes.add({
+if (!prepared.has_source_note) wb.notes.add({
   id:sheet.name+':E3',
   target:{cell:{sheetName:sheet.name,sheetId:sheet.sheetId,address:'E3'}},
   authorId:'',createdAt:'',body:{plainText:data.regulation.source_note}

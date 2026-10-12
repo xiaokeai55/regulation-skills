@@ -3,6 +3,10 @@
 import argparse
 import json
 import re
+import posixpath
+from urllib.parse import unquote
+from xml.etree import ElementTree as ET
+from zipfile import ZipFile, BadZipFile
 from collections import defaultdict
 from copy import copy
 from pathlib import Path
@@ -11,6 +15,81 @@ from openpyxl import load_workbook
 ENGLISH = {"en", "english", "英文", "英语"}
 ERRORS = {"#REF!", "#DIV/0!", "#VALUE!", "#NAME?", "#N/A", "#NUM!", "#NULL!", "#SPILL!", "#CALC!"}
 MERGES = {"A1:A2", "B1:B2", "C1:G1", "H1:H2", "I1:I2", "J1:J2", "K1:K2", "L1:L2", "M1:M2", "N1:N2"}
+
+def check_package(path):
+    """Catch package faults that permissive workbook readers may silently ignore."""
+    failures = []
+    doc_rel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    main = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+    try:
+        with ZipFile(path) as package:
+            names = package.namelist()
+            if len(names) != len(set(names)):
+                failures.append('XLSX包内有重复文件名')
+            bad = package.testzip()
+            if bad:
+                failures.append('XLSX包CRC检查失败：' + bad)
+            for required in ['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml']:
+                if required not in names:
+                    failures.append('XLSX包缺少必需文件：' + required)
+            documents = {}
+            for name in names:
+                if name.endswith(('.xml', '.rels', '.vml')):
+                    try:
+                        documents[name] = ET.fromstring(package.read(name))
+                    except ET.ParseError as error:
+                        failures.append(name + ' XML无效：' + str(error))
+            for name, document in documents.items():
+                if not name.endswith('.rels'):
+                    continue
+                owner = '' if name == '_rels/.rels' else posixpath.join(
+                    posixpath.dirname(posixpath.dirname(name)), posixpath.basename(name)[:-5])
+                ids = set()
+                annotations = set()
+                note_count = 0
+                for relation in document:
+                    rid = relation.get('Id')
+                    if not rid or rid in ids:
+                        failures.append(name + '关系ID缺失或重复：' + str(rid))
+                    ids.add(rid)
+                    if relation.get('TargetMode') == 'External':
+                        continue
+                    target = relation.get('Target', '')
+                    part = posixpath.normpath(posixpath.join(posixpath.dirname(owner), unquote(target))).lstrip('/')
+                    if not target or part not in names:
+                        failures.append(name + '内部关系目标不存在：' + target)
+                        continue
+                    kind = relation.get('Type', '').rsplit('/', 1)[-1]
+                    root = documents.get(part)
+                    if kind == 'comments':
+                        note_count += 1
+                        if note_count > 1:
+                            failures.append(owner + '关联多个备注文件')
+                        if root is not None:
+                            authors = root.find(f'{{{main}}}authors')
+                            author_count = len(authors) if authors is not None else 0
+                            for comment in root.findall(f'{{{main}}}commentList/{{{main}}}comment'):
+                                ref = comment.get('ref', '').replace('$', '').upper()
+                                if not re.fullmatch(r'[A-Z]+[1-9][0-9]*', ref) or ref in annotations:
+                                    failures.append(owner + '备注引用无效或重复：' + ref)
+                                annotations.add(ref)
+                                author = comment.get('authorId', '')
+                                if not author.isdigit() or int(author) >= author_count:
+                                    failures.append(part + '备注作者引用无效：' + author)
+                if owner in documents:
+                    for element in documents[owner].iter():
+                        for key, value in element.attrib.items():
+                            if key.startswith('{' + doc_rel + '}') and value not in ids:
+                                failures.append(owner + '引用不存在的关系ID：' + value)
+            content_types = documents.get('[Content_Types].xml')
+            if content_types is not None:
+                for element in content_types:
+                    part = element.get('PartName')
+                    if part and unquote(part).lstrip('/') not in names:
+                        failures.append('内容类型引用不存在的文件：' + part)
+    except (BadZipFile, OSError, RuntimeError, ValueError) as error:
+        failures.append('无法完整读取XLSX包：' + str(error))
+    return failures
 
 def meaningful(value):
     return isinstance(value, str) and bool(value.strip())
@@ -140,10 +219,18 @@ def check_manifest(data):
 
 def verify_workbook(data, path, template_path=None):
     failures = check_manifest(data)
+    package_failures = check_package(path)
+    failures.extend(package_failures)
+    limitations = '仅机械校验；不替代法规、翻译及证据复核，也不证明Excel正常模式打开无修复提示。'
+    if package_failures:
+        return {"passed": False, "rows": len(data.get("units", [])), "failures": failures, "limitations": limitations}
     def need(ok, message):
         if not ok:
             failures.append(message)
-    workbook = load_workbook(path, data_only=False)
+    try:
+        workbook = load_workbook(path, data_only=False)
+    except Exception as error:
+        return {"passed": False, "rows": len(data.get("units", [])), "failures": failures + ['无法读取工作簿：' + str(error)], "limitations": limitations}
     need(len(workbook.worksheets) == 1, "默认14列交付应只有一张主表")
     sheet = workbook.worksheets[0]
     need(sheet.max_column == 14, "保存文件列数不是14")
@@ -195,7 +282,7 @@ def verify_workbook(data, path, template_path=None):
         need(all(c.value is None for c in rr), "表尾残留其他法规内容：" + str(rr[0].row))
     note = sheet["E3"].comment
     need(note is not None and data.get("regulation", {}).get("source_note", "") in note.text, "首条原文缺来源备注或备注错位")
-    return {"passed": not failures, "rows": len(units), "failures": failures, "limitations": "仅机械校验；不替代对未加工法规全文、翻译法律效果及当前证据来源的逐条复核。"}
+    return {"passed": not failures, "rows": len(units), "failures": failures, "limitations": limitations}
 
 def main():
     parser = argparse.ArgumentParser()
