@@ -22,19 +22,30 @@ if (!review || review.url_status !== 'matched' || typeof review.newer_version_fo
 if (review.newer_version_found && (!text(review.confirmed_version) || review.confirmed_version !== data.regulation.version)) throw new Error('A newer version was found: obtain the user-selected version before authoring');
 const colors = data.format?.applicability_colors ?? {'是':'#00B050','否':'#BFBFBF'};
 if (['是','否'].some(v => !/^#[0-9a-f]{6}$/i.test(colors[v] ?? ''))) throw new Error('Applicability colors require two #RRGGBB values');
-const isEnglish = ['en','english','英文','英语'].includes(String(data.regulation.source_language).toLowerCase());
-const displayLabel = (label, translations = true) => {
-  if (!label || !text(label.original) || (translations && (!text(label.chinese) || (!isEnglish && !text(label.english))))) throw new Error('Record original and required translations of source labels');
-  return [...new Set([label.original,label.english,label.chinese].filter(text))].join('\n');
+const language = data.language_plan;
+if (!language || !text(language.local_language) || !text(language.local_source_search_note) || !['official_original','translated_from_english'].includes(language.local_text_kind)) throw new Error('Record the local language, official-source search, and local text provenance');
+const fromEnglish = language.local_text_kind === 'translated_from_english';
+const localIsEnglish = ['en','english','英文','英语'].includes(language.local_language.toLowerCase());
+if (fromEnglish) {
+  if (!['en','english','英文','英语'].includes(String(data.regulation.source_language).toLowerCase()) || !String(data.regulation.source_note).includes('非官方译文，译自英文')) throw new Error('English-based local translation requires an English source and explicit nonofficial attribution');
+} else if (data.regulation.source_language !== language.local_language) throw new Error('Official local source language must match the recorded local language');
+const sourceColumn = fromEnglish ? 5 : 4;
+const sourceKey = fromEnglish ? 'english' : 'local';
+const displayLabel = label => {
+  if (!label || ['original','local','english','chinese'].some(k=>!text(label[k])) || label.original !== label[sourceKey]) throw new Error('Record three-language labels and preserve the actual source label');
+  return [...new Set([label.local,label.english,label.chinese])].join('\n');
 };
 const rows = data.units.map(u => {
   const row = u.values;
   if (!Array.isArray(row) || row.length !== 14) throw new Error('Need 14-column rows');
   const labels = u.source_labels;
   if (!labels || !Object.hasOwn(labels,'control_subdomain')) throw new Error('Record whether an actual source subheading exists');
-  const expected = [displayLabel(labels.control_domain),displayLabel(labels.clause_number),labels.control_subdomain === null ? '/' : displayLabel(labels.control_subdomain,false)];
+  const expected = [displayLabel(labels.control_domain),displayLabel(labels.clause_number),labels.control_subdomain === null ? '/' : displayLabel(labels.control_subdomain)];
   if (expected.some((v,i)=>row[i+1] !== v)) throw new Error('Displayed labels differ from original/translated source labels: '+u.id);
   if (!['是','否'].includes(row[7])) throw new Error('H requires 是 or 否');
+  if ([4,5,6].some(c=>!text(row[c]))) throw new Error('Local, English, and Chinese text are all required: '+u.id);
+  if (!text(u.original_text) || row[sourceColumn] !== u.original_text) throw new Error('Preserve the actual source text in its language column: '+u.id);
+  if (localIsEnglish && row[4] !== row[5]) throw new Error('When the local language is English, E and F must both preserve the same English text');
   return row;
 });
 if (!rows.length) throw new Error('Need nonempty rows');
@@ -64,8 +75,8 @@ sheet.getRange('A3:N' + Math.max(last,previous)).clear({applyTo:'contents'});
 for (let row = previous + 1; row <= last; row++) sheet.getRange('A'+row+':N'+row).copyFrom(sheet.getRange('A'+previous+':N'+previous),'all');
 sheet.getRange('A3:N' + last).values = rows;
 sheet.getRange('H1').values = [['是否适用于'+target.name]];
-sheet.getRange('E2').values = [[data.regulation.source_language+'版条款（原文）']];
-sheet.getRange('F2').values = [['英文版条款（翻译）']];
+sheet.getRange('E2').values = [[language.local_language+'版条款（'+(fromEnglish?'非官方译文，译自英文':'原文')+'）']];
+sheet.getRange('F2').values = [['英文版条款（'+(fromEnglish || localIsEnglish?'原文':'翻译')+'）']];
 sheet.getRange('G2').values = [['中文简体版条款（翻译）']];
 const applicability = sheet.getRange('H3:H'+Math.max(last,previous));
 applicability.conditionalFormats.deleteAll();

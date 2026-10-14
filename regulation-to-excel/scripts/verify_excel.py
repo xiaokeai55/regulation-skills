@@ -97,16 +97,14 @@ def meaningful(value):
 def labels(text):
     return re.findall(r"(?m)^\s*((?:[a-z]|[ivx]+|[0-9]+)[.)]|\([a-z]\)|[①②③④⑤⑥⑦⑧⑨⑩])(?:\s|$)", text)
 
-def display_label(label, is_english, need, name, translations=True):
+def display_label(label, source_key, need, name):
     if not isinstance(label, dict):
         need(False, name + "缺少原文标题记录")
         return None
-    need(meaningful(label.get("original")), name + "缺少原文")
-    if translations:
-        need(meaningful(label.get("chinese")), name + "缺少中文")
-        if not is_english:
-            need(meaningful(label.get("english")), name + "缺少英文")
-    values = [label.get(key) for key in ["original", "english", "chinese"]]
+    for key in ['original', 'local', 'english', 'chinese']:
+        need(meaningful(label.get(key)), name + "缺少标题语言字段：" + key)
+    need(label.get('original') == label.get(source_key), name + '原始标题与实际来源语言不一致')
+    values = [label.get(key) for key in ["local", "english", "chinese"]]
     return "\n".join(dict.fromkeys(v for v in values if meaningful(v)))
 
 def fill_rgb(fill):
@@ -156,7 +154,22 @@ def check_manifest(data):
             need(meaningful(item.get(field)), "证据字段缺失：" + str(item.get("id")) + "/" + field)
         if meaningful(item.get("quote")) and meaningful(item.get("source_text")):
             need(item["quote"] in item["source_text"], "摘录不在读取的实践原文中：" + str(item.get("id")))
-    is_english = str(reg.get("source_language", "")).lower() in ENGLISH
+    language = data.get('language_plan', {})
+    if not isinstance(language, dict):
+        language = {}
+    for key in ['local_language', 'local_source_search_note']:
+        need(meaningful(language.get(key)), '缺少当地语言核验字段：' + key)
+    kind = language.get('local_text_kind')
+    need(kind in ['official_original', 'translated_from_english'], '缺少有效的当地语言文本来源类型')
+    from_english = kind == 'translated_from_english'
+    local_is_english = str(language.get('local_language', '')).lower() in ENGLISH
+    source_column = 5 if from_english else 4
+    source_key = 'english' if from_english else 'local'
+    if from_english:
+        need(str(reg.get('source_language', '')).lower() in ENGLISH, '当地语言回译必须以核验过的英文为来源')
+        need('非官方译文，译自英文' in str(reg.get('source_note', '')), '来源备注缺少当地语言非官方回译标识')
+    else:
+        need(reg.get('source_language') == language.get('local_language'), '当地官方原文语言与当地语言不一致')
     for index, unit in enumerate(units, 1):
         uid = str(unit.get("id"))
         row = unit.get("values", [])
@@ -170,18 +183,21 @@ def check_manifest(data):
         need(isinstance(source_labels, dict), uid + "原文标题记录无效")
         if isinstance(source_labels, dict):
             for field, column in [("control_domain", 1), ("clause_number", 2)]:
-                expected = display_label(source_labels.get(field), is_english, need, uid + "/" + field)
+                expected = display_label(source_labels.get(field), source_key, need, uid + "/" + field)
                 need(row[column] == expected, uid + "多语言标题不完整或与原文标题记录不同：" + chr(65 + column))
             need("control_subdomain" in source_labels, uid + "未记录原文是否存在控制子域")
             subdomain = source_labels.get("control_subdomain")
             if subdomain is None:
                 need(row[3] == "/", uid + "无原文控制子域时D必须为/")
             else:
-                expected = display_label(subdomain, is_english, need, uid + "/control_subdomain", translations=False)
+                expected = display_label(subdomain, source_key, need, uid + "/control_subdomain")
                 need(row[3] == expected, uid + "D不是记录的原文真实子标题／译文")
-        need(row[4] == unit.get("original_text"), uid + "E与原文清单不同")
+        need(row[source_column] == unit.get("original_text"), uid + "实际来源语言栏与原文清单不同")
+        need(meaningful(row[4]), uid + "当地语言内容缺失")
         need(meaningful(row[6]), uid + "中文译文缺失")
-        need(row[5] is None if is_english else meaningful(row[5]), uid + "英文译文缺失或英文原文F未留空")
+        need(meaningful(row[5]), uid + "英语内容缺失")
+        if local_is_english:
+            need(row[4] == row[5], uid + '当地语言为英语时E和F必须完整填写同一英文内容')
         need(row[7] in ["是", "否"], uid + "H不是是／否")
         for j, value in enumerate(row):
             need(value is None or isinstance(value, (str, int, float)), uid + "含不支持的单元格值")
@@ -201,16 +217,16 @@ def check_manifest(data):
                     need(block.get("file", "") in (row[10] or ""), uid + "K缺少证据文件")
                     need(block.get("locator", "") in (row[10] or ""), uid + "K缺少证据定位")
             need((row[11] == "/") == (row[12] == "/"), uid + "L／M无服务标记不一致")
-        for col in [5, 6]:
+        for col in [4, 5, 6]:
             if meaningful(row[col]):
-                need(labels(row[4]) == labels(row[col]), uid + "原文与译文子项标记不同：" + chr(65 + col))
-                need(row[4].count("•") == row[col].count("•"), uid + "原文与译文列表项数量不同：" + chr(65 + col))
+                need(labels(unit.get('original_text') or '') == labels(row[col]), uid + "原文与译文子项标记不同：" + chr(65 + col))
+                need((unit.get('original_text') or '').count("•") == row[col].count("•"), uid + "原文与译文列表项数量不同：" + chr(65 + col))
     lookup = {u.get("id"): u for u in units}
     for item in data.get("translation_checks", []):
         uid = item.get("id")
         column = item.get("column")
-        need(uid in lookup and column in ["F", "G"], "无效关键译文检查")
-        if uid not in lookup or column not in ["F", "G"]:
+        need(uid in lookup and column in ["E", "F", "G"], "无效关键译文检查")
+        if uid not in lookup or column not in ["E", "F", "G"]:
             continue
         text = lookup[uid]["values"][ord(column) - 65] or ""
         for expected in item.get("contains", []):
@@ -238,6 +254,14 @@ def verify_workbook(data, path, template_path=None):
     target = data.get("target_environment", {})
     target_name = target.get("name", "") if isinstance(target, dict) else ""
     need(sheet["A1"].value == "编号" and sheet["H1"].value == "是否适用于" + target_name, "表头与目标环境不一致")
+    language = data.get('language_plan', {})
+    language = language if isinstance(language, dict) else {}
+    from_english = language.get('local_text_kind') == 'translated_from_english'
+    local_language = str(language.get('local_language', ''))
+    local_is_english = local_language.lower() in ENGLISH
+    need(sheet['E2'].value == local_language + '版条款（' + ('非官方译文，译自英文' if from_english else '原文') + '）', 'E表头未准确区分当地原文与非官方回译')
+    need(sheet['F2'].value == '英文版条款（' + ('原文' if from_english or local_is_english else '翻译') + '）', 'F表头未准确标明英语来源')
+    need(sheet['G2'].value == '中文简体版条款（翻译）', 'G表头语言不正确')
     colors = applicability_colors(data)
     reference = load_workbook(template_path).worksheets[0] if template_path else None
     if reference is not None:
@@ -281,7 +305,7 @@ def verify_workbook(data, path, template_path=None):
     for rr in sheet.iter_rows(min_row=len(units) + 3):
         need(all(c.value is None for c in rr), "表尾残留其他法规内容：" + str(rr[0].row))
     note = sheet["E3"].comment
-    need(note is not None and data.get("regulation", {}).get("source_note", "") in note.text, "首条原文缺来源备注或备注错位")
+    need(note is not None and data.get("regulation", {}).get("source_note", "") in note.text, "首条当地语言单元格缺来源备注或备注错位")
     return {"passed": not failures, "rows": len(units), "failures": failures, "limitations": limitations}
 
 def main():
