@@ -10,7 +10,7 @@
 | D | 控制子域 | 只填原文明确存在的子标题及当地语言、英语和中文；不存在时填“/”，不自行概括主题 |
 | E | 当地语言条款 | 优先同版当地语言官方原文；无法取得时为译自英文的完整非官方译文，明确标注身份 |
 | F | 英文版条款 | 完整英语内容；英文为实际来源时保留原文，否则使用核验后的同版英译或标明非官方自译；不得留空 |
-| G | 中文简体版条款（翻译） | 完整中文译文 |
+| G | 中文简体版条款 | 完整简体中文内容；按真实来源标记原文、官方译文、非官方译文及必要繁简转换 |
 | H | 是否适用于目标环境 | 按实际目标名称显示“是否适用于<名称>”，只填“是”或“否”；证据口径见适用性规则 |
 | I | 相关主体责任解读 | H是时填写，按照实际组织角色区分各主体职责 |
 | J | 内部实践情况 | H是时逐字摘录资料中的目标主体实践 |
@@ -31,7 +31,7 @@ H为否的I至M必须是JSON null／Excel空单元格。D不存在时的“/”�
 
 ## 行粒度与子项合并
 
-在已确认的整理范围内，默认以原文独立条款为一行。同一条款内的引导句、a）、b）、c）、d）等子项及附属说明放在同一行，按原顺序保留换行、编号、全部原文及完整译文。例如11.1.1的子项合为11.1.1一行，12.2的子项合为12.2另一行；不得把这两个独立条款合在一起。独立编号且具有自身义务的条款不因同属一章而合并。附表或附件按实际独立内容单元判断。
+在已确认的整理范围内，按原文独立条款整理，每个条款一行；该条款的全部子项（含数字、字母及嵌套子项）分别合并在E、F、G各语言对应的同一单元格内，保留引导句、结尾、原编号、换行和层级，不按子项另起行。不同独立条款不合并；仅单元格容量不足或用户明确要求时拆分。同一条款内的引导句、a）、b）、c）、d）等子项及附属说明放在同一行，按原顺序保留换行、编号、全部原文及完整译文。例如11.1.1的子项合为11.1.1一行，12.2的子项合为12.2另一行；不得把这两个独立条款合在一起。独立编号且具有自身义务的条款不因同属一章而合并。附表或附件按实际独立内容单元判断。
 
 独立来源清单仍需逐项记录子项及定位，再映射到合并后的输出unit；inventory记录对应输出单元的覆盖标识，同时在工作资料保留子项到unit的对应关系，不能通过合并掩盖漏项。J／K保留全部相关摘录及出处，I／N区分各子项的支持范围和缺口；不能把某一子项有证据写成全部子项已覆盖。
 
@@ -79,7 +79,7 @@ regulation.scope和source_note应准确注明部分整理及摘录范围；真�
     "checked_date": "YYYY-MM-DD",
     "scope": "全文或用户指定范围",
     "source_language": "英语",
-    "source_note": "来源、版本、生效状态、核对日、范围和必要限制"
+    "source_note": "来源、版本、生效状态、核对日、范围和必要限制\nE：原文；来源：示例官方英文文件及条款定位；依据：示例：核验同版英文原文\nF：原文；来源：示例官方英文文件及条款定位；依据：示例：核验同版英文原文\nG：非官方译文；来源：示例官方英文文件及条款定位；依据：示例：据同版英文直接翻译并复核"
   },
   "inventory": [
     "Article 1",
@@ -114,7 +114,27 @@ regulation.scope和source_note应准确注明部分整理及摘录范围；真�
   "language_plan": {
     "local_language": "英语",
     "local_text_kind": "official_original",
-    "local_source_search_note": "已核验本示例的当地正式语言为英语；实际任务记录真实检索入口、结果和日期"
+    "local_source_search_note": "已核验本示例的当地正式语言为英语；实际任务记录真实检索入口、结果和日期",
+    "columns": {
+      "E": {
+        "kind": "original",
+        "source": "示例官方英文文件及条款定位",
+        "basis": "示例：核验同版英文原文",
+        "script_conversion": "none"
+      },
+      "F": {
+        "kind": "original",
+        "source": "示例官方英文文件及条款定位",
+        "basis": "示例：核验同版英文原文",
+        "script_conversion": "none"
+      },
+      "G": {
+        "kind": "unofficial_translation",
+        "source": "示例官方英文文件及条款定位",
+        "basis": "示例：据同版英文直接翻译并复核",
+        "script_conversion": "none"
+      }
+    }
   }
 }
 ```
@@ -129,15 +149,16 @@ regulation.scope和source_note应准确注明部分整理及摘录范围；真�
 - values固定14格，E／F／G依次是完整当地语言、英语及简体中文。original_text匹配实际来源栏：official_original为E，translated_from_english为F；当地语言为英语时E和F仍均填写且一致。id作为稳定覆盖标识，可以不同于C的多语言显示。
 - source_locator能回到原始位置。自动检查只核对标题元数据与单元格一致，不能证明标题真实存在或译文准确，仍须回看原文。
 - translation_checks可检查E、F或G，根据真实条文核对关键数字、起算点和例外，不复用无依据的示例检查。
-- E2动态标注当地语言及“原文”或“非官方译文，译自英文”；F2在回译模式或当地语言本为英语时标为英文原文，否则标为英文译文。旧manifest需按真实来源补齐语言计划与三语内容，不能把旧的空F或英语E冒充当地语言。
+- language_plan.columns必须包含E、F、G，每项含kind（original／official_translation／unofficial_translation）、source（真实来源地址或文件及定位）、basis（版本核对或翻译依据）、script_conversion（none／traditional_to_simplified）。繁转简仅用于G；官方直接发布的简体文本无需标为自行转换。来源身份按证据填写，不因是实际依据就把官方英译或其他译文改称原文；英文作为实际来源时，F仍按其真实身份标记，并在basis说明法律效力和核验依据。
+- E2／F2／G2由来源身份动态生成，中文原文不再固定标为翻译。来源备注逐列包含“E：原文；来源：<source>；依据：<basis>”这样的记录；F／G同理，身份标签取原文、官方译文或非官方译文。E回译标签为“非官方译文，译自英文”；自行繁转简在原身份后追加“，繁转简，非官方转换”。生成与校验共用language_provenance.py检查。旧manifest必须按实际证据补齐，不自动猜测来源身份。
 - 每个H“是”至少有一条evidence，包含id、file、locator、quote及从当前资料读取的source_text；J逐字组合quote，K对应每段定位。source_text不能从J反向拼造。无内部资料时evidence为空，H按证据状态填否并在需要时说明。
 - manifest用于追溯，不默认交付。已有旧manifest需按真实来源和用户消息补齐新增字段，不能自动假定曾完成核验或确认。
 
 ## 辅助脚本运行
 
-安装与平台差异见[仓库使用说明](https://github.com/xiaokeai55/regulation-skills#readme)。Node生成步骤适用于具备artifact-tool的Codex；Claude使用可用xlsx／表格工具，或在不可用时使用可用Excel库。两者遵守相同数据合同和语义复核；具备Python及openpyxl时均可运行只读验证脚本。
+安装与平台差异见[仓库使用说明](https://github.com/xiaokeai55/regulation-skills#readme)。Node生成步骤适用于具备artifact-tool的Codex；Claude使用可用xlsx／表格工具，或在不可用时使用可用Excel库。两者遵守相同数据合同和语义复核；具备Python及openpyxl时均可运行只读验证脚本；verify_excel.py与language_provenance.py须保留在同一目录。
 
-1. 使用当前平台表格skill及运行时依赖，不固定用户、操作系统或旧版本路径。将scripts/build_excel.mjs及同目录prepare_source_note.py复制到本次可写工作目录，在该目录链接平台允许的node_modules；按表格skill记录生成操作。
+1. 使用当前平台表格skill及运行时依赖，不固定用户、操作系统或旧版本路径。将scripts/build_excel.mjs及同目录prepare_source_note.py、language_provenance.py复制到本次可写工作目录，在该目录链接平台允许的node_modules；按表格skill记录生成操作。
 2. 调用 `node build_excel.mjs --manifest manifest.json --template <本次样表.xlsx> --output <用户目录>/法规名称.xlsx --preview-dir <工作目录>/previews --python <当前平台Python路径>`。无新样表时使用随附模板。脚本保留模板样式，超出已有模板范围时沿最后一个正文样式行延展，只对H列设置适用性颜色。生成脚本需Python 3.9以上的标准库处理已有E3来源备注：在临时样表中更新已有备注后导入，没有备注时才新增；保留其他备注，不支持叠加线程批注，发现冲突时停止并按实际样表调整。临时样表用完自动清理。新样表的特殊分区／来源位置及可见F列若超出现有脚本能力，应按实际模板调整生成与验证。
 3. 调用 `python <skill目录>/scripts/verify_excel.py --workbook <输出.xlsx> --manifest manifest.json --template <本次样表.xlsx> --report <工作目录>/verification.json`。传入样表检查列宽、隐藏设置及H列以外的配色保留；同时检查ZIP、XML、内部关系目标及重复备注引用，损坏包以失败报告返回。结构检查不是Excel正常打开的证明。
 4. 可用Excel时，正常模式只读打开最终保存文件，确认无修复提示后关闭且不保存；不可用时在交付说明中明确该项未验证。出现修复提示时回到生成环节修正并重新检查，不交付仍需修复的文件。

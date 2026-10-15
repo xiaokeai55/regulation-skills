@@ -11,6 +11,7 @@ from collections import defaultdict
 from copy import copy
 from pathlib import Path
 from openpyxl import load_workbook
+from language_provenance import language_headers
 
 ENGLISH = {"en", "english", "英文", "英语"}
 ERRORS = {"#REF!", "#DIV/0!", "#VALUE!", "#NAME?", "#N/A", "#NUM!", "#NULL!", "#SPILL!", "#CALC!"}
@@ -121,6 +122,10 @@ def check_manifest(data):
     def need(ok, message):
         if not ok:
             failures.append(message)
+    try:
+        language_headers(data)
+    except (ValueError, KeyError, TypeError, IndexError, AttributeError) as error:
+        need(False, str(error))
     reg = data.get("regulation", {})
     for name in ["title", "user_url", "official_landing_url", "actual_text_url", "version", "checked_date", "scope", "source_language", "source_note"]:
         need(meaningful(reg.get(name)), "来源字段缺失：" + name)
@@ -259,9 +264,11 @@ def verify_workbook(data, path, template_path=None):
     from_english = language.get('local_text_kind') == 'translated_from_english'
     local_language = str(language.get('local_language', ''))
     local_is_english = local_language.lower() in ENGLISH
-    need(sheet['E2'].value == local_language + '版条款（' + ('非官方译文，译自英文' if from_english else '原文') + '）', 'E表头未准确区分当地原文与非官方回译')
-    need(sheet['F2'].value == '英文版条款（' + ('原文' if from_english or local_is_english else '翻译') + '）', 'F表头未准确标明英语来源')
-    need(sheet['G2'].value == '中文简体版条款（翻译）', 'G表头语言不正确')
+    try:
+        for column, header in language_headers(data).items():
+            need(sheet[column + '2'].value == header, column + '表头与实际来源身份不一致')
+    except (ValueError, KeyError, TypeError, IndexError, AttributeError) as error:
+        need(False, str(error))
     colors = applicability_colors(data)
     reference = load_workbook(template_path).worksheets[0] if template_path else None
     if reference is not None:

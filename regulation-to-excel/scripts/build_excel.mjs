@@ -35,6 +35,10 @@ const displayLabel = label => {
   if (!label || ['original','local','english','chinese'].some(k=>!text(label[k])) || label.original !== label[sourceKey]) throw new Error('Record three-language labels and preserve the actual source label');
   return [...new Set([label.local,label.english,label.chinese])].join('\n');
 };
+const { stdout: languageOutput } = await promisify(execFile)(args.python ?? 'python', [
+  fileURLToPath(new URL('./language_provenance.py', import.meta.url)), '--manifest', args.manifest
+], {encoding:'utf8', env:{...process.env,PYTHONIOENCODING:'utf-8'}});
+const languageHeaders = JSON.parse(languageOutput);
 const rows = data.units.map(u => {
   const row = u.values;
   if (!Array.isArray(row) || row.length !== 14) throw new Error('Need 14-column rows');
@@ -75,9 +79,7 @@ sheet.getRange('A3:N' + Math.max(last,previous)).clear({applyTo:'contents'});
 for (let row = previous + 1; row <= last; row++) sheet.getRange('A'+row+':N'+row).copyFrom(sheet.getRange('A'+previous+':N'+previous),'all');
 sheet.getRange('A3:N' + last).values = rows;
 sheet.getRange('H1').values = [['是否适用于'+target.name]];
-sheet.getRange('E2').values = [[language.local_language+'版条款（'+(fromEnglish?'非官方译文，译自英文':'原文')+'）']];
-sheet.getRange('F2').values = [['英文版条款（'+(fromEnglish || localIsEnglish?'原文':'翻译')+'）']];
-sheet.getRange('G2').values = [['中文简体版条款（翻译）']];
+for (const column of ['E','F','G']) sheet.getRange(column+'2').values = [[languageHeaders[column]]];
 const applicability = sheet.getRange('H3:H'+Math.max(last,previous));
 applicability.conditionalFormats.deleteAll();
 sheet.getRange('H3:H'+last).dataValidation = {rule:{type:'list',values:['是','否']}};
